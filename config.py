@@ -11,6 +11,10 @@ class Config:
     LANGCHAIN_API_KEY = os.getenv("LANGCHAIN_API_KEY")
     LANGCHAIN_PROJECT = os.getenv("LANGCHAIN_PROJECT", "Synapse-X")
     
+    MONGODB_CONNECTION_STRING = os.getenv("MONGODB_CONNECTION_STRING")
+    MONGODB_DATABASE_NAME = os.getenv("MONGODB_DATABASE_NAME", "SynapseX")
+    MONGODB_COLLECTION_NAME = os.getenv("MONGODB_COLLECTION_NAME", "ChatHistory")
+    
     SCHEDULER_ALPHA = float(os.getenv("SCHEDULER_ALPHA", "0.4"))
     SCHEDULER_BETA = float(os.getenv("SCHEDULER_BETA", "0.3"))
     SCHEDULER_GAMMA = float(os.getenv("SCHEDULER_GAMMA", "0.2"))

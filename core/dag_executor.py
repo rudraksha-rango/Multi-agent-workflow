@@ -1,24 +1,35 @@
 import asyncio
+import hashlib
+import json
 import logging
 from langsmith import traceable
 from core.dag import DAG, TaskNode
 from core.dag_manager import DAGManager
 from core.dag_evaluator import DAGEvaluator, DAGDecision
 from core.a2a_bus import A2ABus
+from blockchain.ledger import LedgerManager
+from security.identity import AgentIdentity
 
 logger = logging.getLogger(__name__)
 
 class DAGExecutor:
     def __init__(self, dag_manager: DAGManager, a2a_bus: A2ABus,
-                 evaluator: DAGEvaluator = None, budget_manager=None):
+                 evaluator: DAGEvaluator = None, budget_manager=None,
+                 ledger: LedgerManager = None, orchestrator_identity: AgentIdentity = None):
         self.dag_manager = dag_manager
         self.dag = dag_manager.dag
         self.a2a_bus = a2a_bus
         self.evaluator = evaluator
         self.budget_manager = budget_manager
+        self.ledger = ledger
+        self.orchestrator_identity = orchestrator_identity
+        
         self.running_tasks = set()
         self.evaluation_log = []
         self._abort = False
+
+    def _hash_data(self, data: dict) -> str:
+        return hashlib.sha256(json.dumps(data, sort_keys=True).encode('utf-8')).hexdigest()
 
     @traceable(name="DAG Execution")
     async def execute(self):
@@ -57,7 +68,9 @@ class DAGExecutor:
     async def _run_task(self, task: TaskNode, dependency_context: dict = None):
         try:
             logger.info(f"Task {task.task_id} ({task.description}) dispatched to {task.agent_type}")
-            result = await self.a2a_bus.dispatch_task(task, dependency_context)
+            
+            # Use Orchestrator identity if provided to sign requests on the bus
+            result = await self.a2a_bus.dispatch_task(task, dependency_context, caller_identity=self.orchestrator_identity)
             task.result = result
             task.status = "COMPLETED"
             logger.info(f"Task {task.task_id} COMPLETED.")
@@ -67,6 +80,19 @@ class DAGExecutor:
             task.result = str(e)
         finally:
             self.running_tasks.remove(task.task_id)
+            
+            # Phase 3B: Record on Blockchain Ledger
+            if self.ledger:
+                task_hash = self._hash_data({
+                    "task_id": task.task_id, 
+                    "description": task.description, 
+                    "agent_type": task.agent_type
+                })
+                dag_hash = self._hash_data([t.task_id for t in self.dag.nodes.values()])
+                result_hash = self._hash_data({"result": str(task.result)})
+                
+                agent_id = self.orchestrator_identity.agent_id if self.orchestrator_identity else "system"
+                self.ledger.add_transaction(agent_id, task_hash, dag_hash, result_hash, task.status)
 
         if self.evaluator and not self._abort:
             await self._evaluate_and_adapt(task)

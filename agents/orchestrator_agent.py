@@ -9,32 +9,36 @@ from core.a2a_bus import A2ABus
 
 logger = logging.getLogger(__name__)
 
+
 class OrchestratorAgent(BaseAgent):
     def __init__(self, a2a_bus: A2ABus, llm_pool=None):
         super().__init__(llm_pool=llm_pool)
         self.a2a_bus = a2a_bus
-        
-    async def run_dag(self, dag: DAG, budget_manager=None) -> dict:
+
+    async def run_dag(self, dag: DAG, budget_manager=None, orchestrator_identity=None) -> dict:
         logger.info("OrchestratorAgent starting execution of DAG.")
-        
+
         dag_manager = DAGManager(dag)
         evaluator = DAGEvaluator(self.llm_pool) if self.llm_pool else None
-        
+        ledger = getattr(self.a2a_bus, 'ledger', None)
+
         executor = DAGExecutor(
             dag_manager=dag_manager,
             a2a_bus=self.a2a_bus,
             evaluator=evaluator,
-            budget_manager=budget_manager
+            budget_manager=budget_manager,
+            ledger=ledger,
+            orchestrator_identity=orchestrator_identity
         )
         await executor.execute()
-        
+
         results = {}
         for task_id, task in dag.nodes.items():
             results[task.description] = {
                 "status": task.status,
                 "result": task.result
             }
-            
+
         logger.info("OrchestratorAgent finished execution.")
         return {
             "task_results": results,

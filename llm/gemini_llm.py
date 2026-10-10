@@ -5,7 +5,7 @@ from llm.base_llm import BaseLLM, LLMResponse
 from config import config
 
 class GeminiLLM(BaseLLM):
-    def __init__(self, model_name="gemini-2.0-flash"):
+    def __init__(self, model_name="gemini-3.6-flash"):
         if config.GEMINI_API_KEY:
             self.client = genai.Client(api_key=config.GEMINI_API_KEY)
         else:
